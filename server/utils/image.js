@@ -26,6 +26,22 @@ function generateFooterSVG(name, designation, phone, email, textWidth, footerHei
   `;
 }
 
+async function processCircularImage(inputPath, outputPath, size) {
+  const circleMask = Buffer.from(
+    `<svg width="${size}" height="${size}">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="white"/>
+    </svg>`
+  );
+
+  const buffer = await sharp(inputPath)
+    .resize(size, size)
+    .composite([{ input: circleMask, blend: 'dest-in' }])
+    .jpeg()
+    .toBuffer();
+
+  fs.writeFileSync(outputPath, buffer);
+}
+
 async function createFinalPoster({ templatePath, person, logoPath, outputPath }) {
   const templateResized = await sharp(templatePath).resize({ width: 800 }).toBuffer();
   const templateMetadata = await sharp(templateResized).metadata();
@@ -66,7 +82,6 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     .jpeg()
     .toBuffer();
 
-  // Dynamically calculate footer height to fit all elements
   const footerHeight = Math.max(photoSize, textMetadata.height, photoSize) + 20;
 
   const gradientFooterBuffer = await sharp({
@@ -105,5 +120,6 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 
 module.exports = {
   generateFooterSVG,
-  createFinalPoster
+  processCircularImage,
+  createFinalPoster,
 };
