@@ -34,7 +34,7 @@ const AdminPanel = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/users');
+      const response = await fetch('https://image001.onrender.com/api/users');
       const data = await response.json();
       setUsers(data);
     } catch (err) {
@@ -53,7 +53,7 @@ const AdminPanel = () => {
     if (!window.confirm('Delete this user?')) return;
 
     try {
-      await fetch(`http://localhost:3001/api/users/${id}`, {
+      await fetch(`https://image001.onrender.com/api/users/${id}`, {
         method: 'DELETE',
       });
       setUsers(users.filter(u => u.id !== id));
@@ -77,7 +77,7 @@ const AdminPanel = () => {
     if (!editingUser) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/users/${editingUser.id}`, {
+      const response = await fetch(`https://image001.onrender.com/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingUser),
@@ -208,7 +208,7 @@ const AdminPanel = () => {
               >
                 {user.photoUrl && (
                   <img
-                    src={`http://localhost:3001/${user.photoUrl}`}
+                    src={`https://image001.onrender.com/${user.photoUrl}`}
                     alt={user.name}
                     className="w-16 h-16 rounded-full object-cover border"
                   />
