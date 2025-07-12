@@ -54,7 +54,7 @@ const MemberRegistration = () => {
       data.append('designation', formData.designation.join(','));
       data.append('photo', formData.photo);
 
-      const res = await fetch('http://localhost:3001/api/register', {
+      const res = await fetch('https://image001.onrender.com/api/register', {
         method: 'POST',
         body: data,
       });
