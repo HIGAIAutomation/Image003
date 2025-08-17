@@ -4,13 +4,13 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
+const db = require('./db');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Use JSON file for simple persistence
-const USERS_FILE = path.join(__dirname, 'users.json');
+// Uploads directory
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 
 // Admin authentication middleware
@@ -34,27 +34,7 @@ const deleteFileIfExists = async (filePath) => {
   }
   return false;
 };
-function readUsers() {
-  try {
-    if (!fs.existsSync(USERS_FILE)) {
-      fs.writeFileSync(USERS_FILE, '[]');
-      return [];
-    }
-    const data = fs.readFileSync(USERS_FILE);
-    if (!data.length) return [];
-    return JSON.parse(data);
-  } catch (err) {
-    console.error('Error reading users.json:', err);
-    return [];
-  }
-}
-function writeUsers(users) {
-  try {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-  } catch (err) {
-    console.error('Error writing users.json:', err);
-  }
-}
+// Note: persistence is moved to MongoDB via ./db.js
 
 // Multer setup for photo uploads with file naming
 const storage = multer.diskStorage({
@@ -124,71 +104,70 @@ app.post('/api/admin-login', (req, res) => {
 });
 
 // Get all users
-app.get('/api/users', (req, res) => {
-  const users = readUsers();
-  res.json(Array.isArray(users) ? users : []);
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await db.allUsers();
+    res.json(Array.isArray(users) ? users : []);
+  } catch (err) {
+    console.error('Error fetching users from DB:', err);
+    res.status(500).json([]);
+  }
 });
 
 // Create user
-app.post('/api/users', upload.single('photo'), (req, res) => {
-  const users = readUsers();
-  const { name, email } = req.body;
-  const photoUrl = req.file ? `/uploads/${req.file.filename}` : '';
-  const id = Date.now().toString();
-  const user = { id, name, email, photoUrl };
-  users.push(user);
-  writeUsers(users);
-  res.json(user);
+app.post('/api/users', upload.single('photo'), async (req, res) => {
+  try {
+    const { name, email, phone, designation } = req.body;
+    const photoUrl = req.file ? `/uploads/${req.file.filename}` : '';
+    const id = Date.now().toString();
+    const user = { id, name, email, phone: phone || '', designation: designation || '', photoUrl };
+    const created = await db.createUser(user);
+    res.json(created);
+  } catch (err) {
+    console.error('Error creating user:', err);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
 });
 
 // Edit user
-app.put('/api/users/:id', (req, res) => {
-  const users = readUsers();
-  const { id } = req.params;
-  const { name, email } = req.body;
-  const user = users.find(u => u.id === id);
-  if (user) {
-    user.name = name;
-    user.email = email;
-    writeUsers(users);
-    res.json(user);
-  } else {
-    res.status(404).json({ message: 'User not found' });
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const changes = req.body;
+    const updated = await db.updateUser(id, changes);
+    if (!updated) return res.status(404).json({ message: 'User not found' });
+    res.json(updated);
+  } catch (err) {
+    console.error('Error updating user:', err);
+    res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
 // Delete user
-app.delete('/api/users/:id', (req, res) => {
-  let users = readUsers();
-  const { id } = req.params;
-  const user = users.find(u => u.id === id);
-  if (user && user.photoUrl) {
-    const photoPath = path.join(__dirname, user.photoUrl);
-    try {
-      fs.unlinkSync(photoPath);
-    } catch (err) {
-      console.error('Error deleting photo file:', err);
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const user = await db.getUser(id);
+    if (user && user.photoUrl) {
+      const photoPath = path.join(__dirname, user.photoUrl);
+      try { fs.unlinkSync(photoPath); } catch (e) { /* ignore */ }
     }
+    await db.deleteUser(id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).json({ error: 'Failed to delete user' });
   }
-  users = users.filter(u => u.id !== id);
-  writeUsers(users);
-  res.json({ success: true });
 });
 
 // Admin - Update user's photo
 app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res) => {
   try {
-    const users = readUsers();
     const { id } = req.params;
-    const user = users.find(u => u.id === id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = await db.getUser(id);
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'No photo uploaded' });
-    }
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
 
     // Delete old photo if it exists
     if (user.photoUrl) {
@@ -196,15 +175,9 @@ app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res
       await deleteFileIfExists(oldPhotoPath);
     }
 
-    // Update user's photo URL
-    user.photoUrl = `/uploads/${req.file.filename}`;
-    writeUsers(users);
-
-    res.json({ 
-      success: true,
-      photoUrl: user.photoUrl,
-      message: 'Photo updated successfully by admin'
-    });
+    const photoUrl = `/uploads/${req.file.filename}`;
+    const updated = await db.updateUser(id, { ...user, photoUrl });
+    res.json({ success: true, photoUrl: updated.photoUrl, message: 'Photo updated successfully by admin' });
   } catch (error) {
     console.error('Error updating photo:', error);
     res.status(500).json({ error: 'Failed to update photo' });
@@ -214,26 +187,14 @@ app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res
 // Delete user's photo
 app.delete('/api/users/:id/photo', async (req, res) => {
   try {
-    const users = readUsers();
     const { id } = req.params;
-    const user = users.find(u => u.id === id);
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const user = await db.getUser(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user.photoUrl) return res.status(404).json({ error: 'User has no photo' });
 
-    if (!user.photoUrl) {
-      return res.status(404).json({ error: 'User has no photo' });
-    }
-
-    // Delete photo file
     const photoPath = path.join(__dirname, user.photoUrl);
     await deleteFileIfExists(photoPath);
-    
-    // Update user record
-    user.photoUrl = '';
-    writeUsers(users);
-    
+    await db.updateUser(id, { ...user, photoUrl: '' });
     res.json({ success: true, message: 'Photo deleted successfully' });
   } catch (error) {
     console.error('Error deleting photo:', error);
@@ -244,11 +205,11 @@ app.delete('/api/users/:id/photo', async (req, res) => {
 // Export users to Excel (Admin only)
 app.get('/api/export-users', isAdmin, async (req, res) => {
   try {
-    const users = readUsers();
-    
+    const users = await db.allUsers();
+
     // Create workbook and worksheet
     const workbook = XLSX.utils.book_new();
-    
+
     // Format data for Excel
     const excelData = users.map(user => ({
       ID: user.id,
@@ -256,10 +217,10 @@ app.get('/api/export-users', isAdmin, async (req, res) => {
       Email: user.email,
       Photo: user.photoUrl ? 'Yes' : 'No'
     }));
-    
+
     // Convert data to worksheet
     const worksheet = XLSX.utils.json_to_sheet(excelData);
-    
+
     // Set column widths
     const colWidths = [
       { wch: 15 }, // ID
@@ -268,17 +229,17 @@ app.get('/api/export-users', isAdmin, async (req, res) => {
       { wch: 10 }  // Photo
     ];
     worksheet['!cols'] = colWidths;
-    
+
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Users');
-    
+
     // Generate Excel file
     const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    
+
     // Set headers for file download
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=users.xlsx');
-    
+
     // Send file
     res.send(excelBuffer);
   } catch (error) {
@@ -288,13 +249,13 @@ app.get('/api/export-users', isAdmin, async (req, res) => {
 });
     
 // Export member sheet to Excel (Admin only)
-app.get('/api/export-members', isAdmin, (req, res) => {
+app.get('/api/export-members', isAdmin, async (req, res) => {
   try {
-    const users = readUsers();
-    
+    const users = await db.allUsers();
+
     // Create workbook and worksheet
     const workbook = XLSX.utils.book_new();
-    
+
     // Format data for Excel
     const excelData = users.map(user => ({
       'Member ID': user.id,
@@ -304,10 +265,10 @@ app.get('/api/export-members', isAdmin, (req, res) => {
       'Designation': user.designation || 'N/A',
       'Photo Status': user.photoUrl ? 'Available' : 'Not Available'
     }));
-    
+
     // Convert data to worksheet
     const worksheet = XLSX.utils.json_to_sheet(excelData);
-    
+
     // Set column widths
     const colWidths = [
       { wch: 15 }, // Member ID
@@ -318,17 +279,17 @@ app.get('/api/export-members', isAdmin, (req, res) => {
       { wch: 15 }  // Photo Status
     ];
     worksheet['!cols'] = colWidths;
-    
+
     // Add the worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, 'User List');
-    
+
     // Create buffer
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-    
+
     // Set response headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=user_list.xlsx');
-    
+
     // Send the file
     res.send(excelBuffer);
   } catch (error) {
@@ -337,7 +298,12 @@ app.get('/api/export-members', isAdmin, (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
-  console.log(`Server running on ${BACKEND_URL}`);
-});
+const startServer = async () => {
+  await db.connect();
+  app.listen(PORT, () => {
+    const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+    console.log(`Server running on ${BACKEND_URL}`);
+  });
+};
+
+startServer();

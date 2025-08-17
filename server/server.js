@@ -15,6 +15,7 @@ const path = require('path');
 const { saveToExcel, getMembersByDesignation, getAllUsers, deleteUser, updateUser } = require('./utils/excel');
 const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
 const { sendEmail, testEmailConfiguration } = require('./utils/emailSender');
+const db = require('./db');
 
 const app = express();
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
@@ -57,20 +58,31 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.get('/api/users', (req, res) => {
+app.get('/api/users', async (req, res) => {
   try {
-    const users = getAllUsers(EXCEL_PATH);
-    res.json(users);
+    const users = await db.allUsers();
+    // normalize: older records may have `photo` while client expects `photoUrl`
+    const normalized = users.map(u => ({
+      ...u,
+      photoUrl: u.photoUrl || u.photo || ''
+    }));
+    res.json(normalized);
   } catch (error) {
+    console.error('Fetch users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
-app.delete('/api/users/:id', (req, res) => {
+app.delete('/api/users/:id', async (req, res) => {
   try {
-    deleteUser(EXCEL_PATH, req.params.id);
+    const user = await db.getUser(req.params.id);
+    if (user && user.photo) {
+      try { fs.unlinkSync(user.photo); } catch (e) { /* ignore */ }
+    }
+    await db.deleteUser(req.params.id);
     res.json({ success: true });
   } catch (error) {
+    console.error('Delete user error:', error);
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });
@@ -91,7 +103,7 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
       if (!fs.existsSync(req.file.path)) throw new Error('Uploaded file not found');
       await processCircularImage(req.file.path, finalPhotoPath, 200);
       if (!fs.existsSync(finalPhotoPath)) throw new Error('Failed to save processed image');
-      try { fs.unlinkSync(req.file.path); } catch (e) { console.warn('Cleanup error:', e); }
+  try { await fs.promises.unlink(req.file.path); } catch (e) { console.warn('Cleanup error (ignored):', e.message || e); }
     } catch (err) {
       console.error('Image processing failed:', err);
       try {
@@ -103,27 +115,25 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
     }
 
     try {
-      // If designation is 'both', create two profiles
       if (designation && designation.toLowerCase() === 'both') {
-        const id1 = Date.now().toString();
-        const userData1 = { id: id1, name, phone, email, designation: 'Health Insurance Advisor', photo: finalPhotoPath, createdAt: new Date().toISOString() };
-        saveToExcel(userData1, EXCEL_PATH);
-        const id2 = (Date.now() + 1).toString();
-        const userData2 = { id: id2, name, phone, email, designation: 'Wealth Manager', photo: finalPhotoPath, createdAt: new Date().toISOString() };
-        saveToExcel(userData2, EXCEL_PATH);
-        res.json({ success: true, message: '✅ Two profiles registered successfully', users: [userData1, userData2] });
-      } else {
-        const id = Date.now().toString();
-        const userData = { id, name, phone, email, designation, photo: finalPhotoPath, createdAt: new Date().toISOString() };
-        saveToExcel(userData, EXCEL_PATH);
-        res.json({ success: true, message: '✅ Member registered successfully', user: userData });
-      }
+          const id1 = Date.now().toString();
+          const userData1 = { id: id1, name, phone, email, designation: 'Health Insurance Advisor', photoUrl: `/${finalPhotoPath}` };
+          const id2 = (Date.now() + 1).toString();
+          const userData2 = { id: id2, name, phone, email, designation: 'Wealth Manager', photoUrl: `/${finalPhotoPath}` };
+          await db.createUser(userData1);
+          await db.createUser(userData2);
+          res.json({ success: true, message: '✅ Two profiles registered successfully', users: [userData1, userData2] });
+        } else {
+          const id = Date.now().toString();
+          const userData = { id, name, phone, email, designation, photoUrl: `/${finalPhotoPath}` };
+          await db.createUser(userData);
+          res.json({ success: true, message: '✅ Member registered successfully', user: userData });
+        }
     } catch (err) {
-      if (err.message && err.message.includes('email is already registered')) {
-        res.status(400).json({ error: err.message, details: 'Duplicate email registration' });
-      } else {
-        throw err;
+      if (err.message && err.message.includes('duplicate key')) {
+        return res.status(400).json({ error: 'Duplicate entry' });
       }
+      throw err;
     }
   } catch (error) {
     console.error('Registration error:', error);
@@ -154,11 +164,7 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
     let totalRecipients = 0;
     for (const desig of designationsToSend) {
       // Use case-insensitive search but maintain correct designation format in output
-      const recipients = getMembersByDesignation(desig.toLowerCase(), EXCEL_PATH)
-        .map(recipient => ({
-          ...recipient,
-          designation: desig // Use the standardized designation format
-        }));
+  const recipients = (await db.findMembersByDesignation(desig)).map(recipient => ({ ...recipient, designation: desig }));
 
       if (!recipients.length) continue;
       totalRecipients += recipients.length;
@@ -168,14 +174,14 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
         try {
           await createFinalPoster({ templatePath, person, logoPath: LOGO_PATH, outputPath: finalImagePath });
           await sendEmail({ Name: person.name, Email: person.email, Phone: person.phone, Designation: person.designation }, finalImagePath);
-          try { fs.unlinkSync(finalImagePath); } catch (e) { console.warn(`Cleanup failed for ${person.name}:`, e); }
+    try { await fs.promises.unlink(finalImagePath); } catch (e) { console.warn(`Cleanup failed for ${person.name} (ignored):`, e.message || e); }
         } catch (err) {
           console.error(`Failed for ${person.name}:`, err);
         }
       }
     }
 
-    try { fs.unlinkSync(templatePath); } catch (e) { console.warn('Template cleanup failed:', e); }
+  try { fs.unlinkSync(templatePath); } catch (e) { console.warn('Template cleanup failed (ignored):', e.message || e); }
 
     if (totalRecipients === 0) {
       return res.status(404).json({ error: `No recipients found for designation: ${designation}` });
@@ -203,6 +209,14 @@ const crypto = require('crypto');
 
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
+}
+
+// Admin authorization middleware used by endpoints that require admin access
+function isAdmin(req, res, next) {
+  const isAdminQuery = req.query.isAdmin === 'true';
+  const token = req.signedCookies && req.signedCookies[ADMIN_COOKIE_NAME];
+  if (isAdminQuery || token) return next();
+  return res.status(403).json({ error: 'Admin access required' });
 }
 
 // Admin login: set secure cookie
@@ -244,11 +258,96 @@ app.put('/api/users/:id', async (req, res) => {
     if (!id || !name || !email || !phone || !designation) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    const updatedUser = updateUser(EXCEL_PATH, id, { name, email, phone, designation });
+    // prevent duplicate email
+    const existing = await db.User.findOne({ email });
+    if (existing && existing.id !== id) {
+      return res.status(400).json({ error: 'Email already in use by another user' });
+    }
+    const updatedUser = await db.updateUser(id, { name, email, phone, designation });
+    if (!updatedUser) return res.status(404).json({ error: 'User not found' });
     res.json({ success: true, message: '✅ User updated successfully', user: updatedUser });
   } catch (error) {
     console.error('Update error:', error);
-    res.status(error.message.includes('not found') ? 404 : 400).json({ error: error.message || 'Failed to update user' });
+    res.status(500).json({ error: error.message || 'Failed to update user' });
+  }
+});
+
+// Admin helper: create user via JSON (no photo) for quick testing
+app.post('/api/admin/users', async (req, res) => {
+  try {
+    const { id, name, email, phone, designation } = req.body;
+    if (!id || !name || !email) return res.status(400).json({ error: 'id, name and email required' });
+    const exists = await db.User.findOne({ email });
+    if (exists) return res.status(400).json({ error: 'Email already registered' });
+    const user = { id: String(id), name, email, phone: phone || '', designation: designation || '', photoUrl: '' };
+    const created = await db.createUser(user);
+    res.json({ success: true, user: created });
+  } catch (err) {
+    console.error('Admin create error:', err);
+    res.status(500).json({ error: err.message || 'Failed to create user' });
+  }
+});
+
+// Admin endpoint: run photo -> photoUrl migration on demand
+app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
+  try {
+    const users = await db.User.find({
+      $and: [
+        { $or: [ { photoUrl: { $exists: false } }, { photoUrl: '' }, { photoUrl: null } ] },
+        { photo: { $exists: true, $ne: '' } }
+      ]
+    }).lean();
+
+    let updated = 0;
+    for (const u of users) {
+      const val = u.photo || '';
+      if (!val) continue;
+      const photoUrl = val.startsWith('/') ? val : `/${val}`;
+      try { await db.updateUser(u.id, { ...u, photoUrl }); updated++; } catch(e) { console.warn('skip', u.id, e.message); }
+    }
+
+    res.json({ success: true, updated });
+  } catch (err) {
+    console.error('Migration API failed:', err);
+    res.status(500).json({ error: 'Migration failed' });
+  }
+});
+
+// Admin: replace existing user's photo
+app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
+
+    const user = await db.getUser(id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // build a safe filename based on user name or id
+    const filenameSafe = (user.name || id).replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const finalPhotoPath = `uploads/${filenameSafe}_${Date.now()}.jpeg`;
+
+    try {
+      await processCircularImage(req.file.path, finalPhotoPath, 200);
+      try { await fs.promises.unlink(req.file.path); } catch (e) { /* ignore cleanup error */ }
+    } catch (err) {
+      // fallback: move original upload into final location
+      try { await fs.promises.rename(req.file.path, finalPhotoPath); } catch (e) { console.warn('Fallback save failed:', e.message || e); }
+    }
+
+    // delete previous photo file if exists
+    const oldPhoto = user.photoUrl || user.photo || '';
+    if (oldPhoto) {
+      const oldPath = path.join(__dirname, oldPhoto.startsWith('/') ? oldPhoto.slice(1) : oldPhoto);
+      try { await fs.promises.unlink(oldPath); } catch (e) { console.warn('Old photo unlink failed (ignored):', e.message || e); }
+    }
+
+    const photoUrl = `/${finalPhotoPath}`;
+    await db.updateUser(id, { ...user, photoUrl, photo: finalPhotoPath });
+
+    res.json({ success: true, photoUrl });
+  } catch (err) {
+    console.error('Admin photo update error:', err);
+    res.status(500).json({ error: 'Failed to update photo' });
   }
 });
 
@@ -285,6 +384,18 @@ app.get('/api/export-members', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on ${BACKEND_URL}`);
-});
+
+const startServer = async () => {
+  try {
+    await db.connect();
+  } catch (err) {
+    console.error('Failed to connect to DB, exiting.');
+    process.exit(1);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on ${BACKEND_URL}`);
+  });
+};
+
+startServer();
