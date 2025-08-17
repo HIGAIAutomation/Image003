@@ -117,8 +117,18 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 
   const photoSize = Math.floor(width * 0.18);
   const fontSize = Math.round(width * 0.022); // ~18px for 800px width
-  const textWidth = width * 0.48; // More width for text
   const logoSize = Math.floor(width * 0.15);
+
+  // Reserve layout positions so logo/line don't overlap text.
+  const photoLeft = 40;
+  const textLeft = photoLeft + photoSize + 20;
+  const lineWidth = 4;
+  const lineGap = 20; // gap between text and vertical line
+  const rightMargin = 24; // margin between logo and right edge
+  // available space for text before the vertical line and logo
+  const reservedRight = lineGap + lineWidth + logoSize + rightMargin;
+  let textWidth = Math.max(Math.floor(width * 0.38), width - textLeft - reservedRight);
+  if (textWidth < 120) textWidth = Math.max(120, Math.floor(width * 0.35));
 
   // Footer height: 4 lines, minimal vertical space, plus padding
   const lineHeight = Math.round(fontSize * 1.18);
@@ -160,16 +170,15 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     .jpeg()
     .toBuffer();
 
-  const photoLeft = 40;
-  const textLeft = photoLeft + photoSize + 20;
-
-  const lineWidth = 4;
-  const lineGap = 32; // Closer to text
-
-  // Move vertical line and logo closer to text, as in reference
+  // Move vertical line and logo relative to measured text width
   const rightSectionStart = textLeft + textMetadata.width + 10;
-  const lineX = rightSectionStart + lineGap;
-  const logoXCentered = lineX + lineWidth + 32;
+  const lineX = Math.min(textLeft + textWidth + 8, rightSectionStart + 8);
+  let logoXCentered = lineX + lineWidth + 16;
+  // ensure logo doesn't overflow the template width
+  const maxLogoLeft = width - logoSize - rightMargin;
+  if (logoXCentered > maxLogoLeft) {
+    logoXCentered = maxLogoLeft;
+  }
 
   const lineY = Math.floor((footerHeight - logoSize) / 2);
   const lineHeightSVG = logoSize;
