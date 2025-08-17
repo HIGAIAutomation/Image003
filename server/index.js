@@ -3,8 +3,11 @@ const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const XLSX = require('xlsx');
+require('dotenv').config();
+
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Use JSON file for simple persistence
 const USERS_FILE = path.join(__dirname, 'users.json');
@@ -107,10 +110,13 @@ app.post('/api/send-posters', upload.array('posters'), async (req, res) => {
   }
 });
 
-// Admin login (dummy)
+// Admin login with env variables
 app.post('/api/admin-login', (req, res) => {
   const { username, password } = req.body;
-  if (username === 'admin' && password === 'admin123') {
+  const adminUsername = process.env.ADMIN_USERNAME || 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'password123';
+  
+  if (username === adminUsername && password === adminPassword) {
     res.json({ success: true });
   } else {
     res.status(401).json({ success: false, message: 'Invalid credentials' });
@@ -234,57 +240,104 @@ app.delete('/api/users/:id/photo', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete photo' });
   }
 });
+
+// Export users to Excel (Admin only)
+app.get('/api/export-users', isAdmin, async (req, res) => {
+  try {
+    const users = readUsers();
     
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    
+    // Format data for Excel
+    const excelData = users.map(user => ({
+      ID: user.id,
+      Name: user.name,
+      Email: user.email,
+      Photo: user.photoUrl ? 'Yes' : 'No'
+    }));
+    
+    // Convert data to worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Set column widths
+    const colWidths = [
+      { wch: 15 }, // ID
+      { wch: 30 }, // Name
+      { wch: 35 }, // Email
+      { wch: 10 }  // Photo
+    ];
+    worksheet['!cols'] = colWidths;
+    
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Users');
+    
+    // Generate Excel file
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=users.xlsx');
+    
+    // Send file
+    res.send(excelBuffer);
+  } catch (error) {
+    console.error('Error exporting users:', error);
+    res.status(500).json({ error: 'Failed to export users' });
+  }
+});
+    
+// Export member sheet to Excel (Admin only)
+app.get('/api/export-members', isAdmin, (req, res) => {
+  try {
+    const users = readUsers();
+    
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    
+    // Format data for Excel
+    const excelData = users.map(user => ({
+      'Member ID': user.id,
+      'Full Name': user.name,
+      'Email': user.email,
+      'Phone': user.phone || 'N/A',
+      'Designation': user.designation || 'N/A',
+      'Photo Status': user.photoUrl ? 'Available' : 'Not Available'
+    }));
+    
+    // Convert data to worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Set column widths
+    const colWidths = [
+      { wch: 15 }, // Member ID
+      { wch: 30 }, // Full Name
+      { wch: 35 }, // Email
+      { wch: 15 }, // Phone
+      { wch: 25 }, // Designation
+      { wch: 15 }  // Photo Status
+    ];
+    worksheet['!cols'] = colWidths;
+    
+    // Add the worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'User List');
+    
+    // Create buffer
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=user_list.xlsx');
+    
+    // Send the file
+    res.send(excelBuffer);
+  } catch (error) {
+    console.error('Error exporting Excel:', error);
+    res.status(500).json({ error: 'Failed to export Excel file' });
+  }
+});
+
 app.listen(PORT, () => {
   const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
   console.log(`Server running on ${BACKEND_URL}`);
 });
-
-// In AdminPanel.tsx
-const handleImageSave = async (userId, photoFile) => {
-  const formData = new FormData();
-  formData.append('photo', photoFile);
-
-  try {
-    const response = await fetch(`/api/users/${userId}/photo?isAdmin=true`, {
-      method: 'PUT',
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to update photo');
-    }
-
-    const data = await response.json();
-    // Handle success
-    return data.photoUrl;
-  } catch (error) {
-    console.error('Error:', error);
-    throw error;
-  }
-};
-
-const handlePosterSubmit = async (posterFiles) => {
-  const formData = new FormData();
-  posterFiles.forEach(file => {
-    formData.append('posters', file);
-  });
-
-  try {
-    const response = await fetch('/api/send-posters', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to upload posters');
-    }
-
-    const data = await response.json();
-    // data.posters will contain an array of poster URLs
-    return data.posters;
-  } catch (error) {
-    console.error('Error:', error);
-    throw error;
-  }
-};

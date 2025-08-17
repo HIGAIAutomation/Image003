@@ -4,7 +4,7 @@ import { Modal, message } from 'antd';
 import ReactCrop, { Crop, PixelCrop } from 'react-image-crop';
 import { centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { AiOutlineCloudUpload, AiOutlineEdit, AiOutlineDelete } from 'react-icons/ai';
+import { AiOutlineCloudUpload, AiOutlineEdit, AiOutlineDelete, AiOutlineDownload } from 'react-icons/ai';
 
 // ------------------ Types ------------------
 type User = {
@@ -46,7 +46,7 @@ const MobileDashboardCard: React.FC<{ title: string; value: string | number; ico
   </div>
 );
 
-const DesktopDashboardCard: React.FC<{ title: string; value: string | number; description: string; icon: React.ReactNode }> = ({ title, value, description, icon }) => (
+const DesktopDashboardCard: React.FC<{ title: string; value: string | number; description: React.ReactNode; icon: React.ReactNode }> = ({ title, value, description, icon }) => (
   <div className="bg-white rounded-xl p-4 border border-gray-200 hover:shadow-lg transition-all duration-300">
     <div className="flex items-start gap-3">
       <div className="bg-blue-50 p-3 rounded-lg flex-shrink-0">
@@ -80,6 +80,34 @@ const AdminPanel: React.FC = () => {
 
   // Backend status
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'pinging'>('pinging');
+  
+  // Excel export
+  const handleExportExcel = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}api/export-members?isAdmin=true`, {
+        method: 'GET',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export Excel');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'user_list.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      message.success('Excel file downloaded successfully');
+    } catch (error) {
+      console.error('Error exporting Excel:', error);
+      message.error('Failed to export Excel file');
+    }
+  };
 
   // Confirm modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -380,10 +408,29 @@ const AdminPanel: React.FC = () => {
 
   // ------------------ Render helpers ------------------
   const renderDashboardCards = (isMobile: boolean) => (
-    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-6">
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <button
+          onClick={handleExportExcel}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+        >
+          <AiOutlineDownload className="w-5 h-5" />
+          <span>Export to Excel</span>
+        </button>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-6">
       {isMobile ? (
         <>
-          <MobileDashboardCard title="Total Users" value={loading ? '-' : dashboardStats.totalUsers} icon="👥" />
+          <div className="flex flex-col gap-2 col-span-2">
+            <MobileDashboardCard title="Total Users" value={loading ? '-' : dashboardStats.totalUsers} icon="👥" />
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center justify-center gap-2 w-full bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <AiOutlineDownload className="w-5 h-5" />
+              <span>Export to Excel</span>
+            </button>
+          </div>
           <MobileDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} icon="⚕️" />
           <MobileDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} icon="📈" />
           <MobileDashboardCard title="Partners" value={loading ? '-' : dashboardStats.partners} icon="🤝" />
@@ -391,41 +438,61 @@ const AdminPanel: React.FC = () => {
         </>
       ) : (
         <>
-          <DesktopDashboardCard title="Total Users" value={loading ? '-' : dashboardStats.totalUsers} description="All registered members" icon="👥" />
+          <div className="col-span-2 lg:col-span-1">
+            <DesktopDashboardCard 
+              title="Total Users" 
+              value={loading ? '-' : dashboardStats.totalUsers} 
+              description={
+                <div className="mt-2">
+                  <button
+                    onClick={handleExportExcel}
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
+                  >
+                    <AiOutlineDownload className="w-5 h-5" />
+                    <span>Export to Excel</span>
+                  </button>
+                </div>
+              } 
+              icon="👥" 
+            />
+          </div>
           <DesktopDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} description="Health Insurance Advisors" icon="⚕️" />
           <DesktopDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} description="Wealth Management Team" icon="📈" />
           <DesktopDashboardCard title="Partners" value={loading ? '-' : dashboardStats.partners} description="Business Partners" icon="🤝" />
           <DesktopDashboardCard title="Designated Users" value={loading ? '-' : dashboardStats.designatedUsers} description="Users with specific roles" icon="🎯" />
         </>
       )}
-    </div>
-  );
-
-  const renderSearchSectionContent = () => (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1">
-          <input
-            type="email"
-            placeholder="Enter member's email..."
-            value={searchEmail}
-            onChange={e => setSearchEmail(e.target.value)}
-            className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
-          />
-        </div>
-        <button
-          onClick={handleSearch}
-          className="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm sm:text-base"
-          aria-label="Search user by email"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <span>Search Member</span>
-        </button>
       </div>
     </div>
   );
+
+  const renderSearchSectionContent = () => {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1">
+            <input
+              type="email"
+              placeholder="Enter member's email..."
+              value={searchEmail}
+              onChange={e => setSearchEmail(e.target.value)}
+              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base"
+            />
+          </div>
+          <button
+            onClick={handleSearch}
+            className="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 text-sm sm:text-base"
+            aria-label="Search user by email"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Search Member</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderUserListContent = () => (
     <div className="space-y-3">
@@ -625,8 +692,15 @@ const AdminPanel: React.FC = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Marketing Poster</h1>
+            <button
+              onClick={handleExportExcel}
+              className="flex items-center gap-2 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm"
+            >
+              <AiOutlineDownload className="w-5 h-5" />
+              <span className="hidden sm:inline">Export Users</span>
+            </button>
             {backendStatus !== 'offline' && (
               <span
                 className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full font-medium ${

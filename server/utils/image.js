@@ -17,27 +17,59 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
   const verticalPadding = (footerHeight - totalHeight) / 2;
   const startY = verticalPadding + lineHeight * 0.6; // First baseline
   const textPadding = 2; // Consistent left padding
-  const allFontSize = Math.max(fontSize, 20); // Minimum 18px for clarity
+  // Minimum font size allowed; lower value to avoid forced overflow
+  const MIN_FONT_SIZE = 12;
+  const allFontSizeInitial = Math.max(fontSize, 18);
+  let allFontSize = allFontSizeInitial;
 
-  // Format designation to handle both cases properly
-  let formattedDesignation;
-  if (designation.toLowerCase().includes('wealth')) {
-    formattedDesignation = 'Wealth Manager | WealthPlus';
-  } else if (designation.toLowerCase().includes('health')) {
-    formattedDesignation = 'Health Insurance Advisor | WealthPlus';
-  } else {
-    formattedDesignation = `${designation} | WealthPlus`;
+  // Helper: normalize casing and format designation
+  const normalizeDesignation = (d) => {
+    if (!d) return 'N/A | WealthPlus';
+    const dl = d.toLowerCase();
+    if (dl.includes('wealth')) return 'Wealth Manager | WealthPlus';
+    if (dl.includes('health')) return 'Health Insurance Advisor | WealthPlus';
+    return `${d.replace(/\s+/g, ' ').trim()} | WealthPlus`;
+  };
+
+  const formattedDesignation = normalizeDesignation(designation || '');
+
+  // Escape XML special chars for SVG
+  const escapeXml = (unsafe) => String(unsafe)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
+  // Prepare lines and dynamically adjust font size to fit within textWidth
+  const lines = [
+    String(name || ''),
+    formattedDesignation,
+    `Phone: ${String(phone || '')}`,
+    'IRDAI Certified Insurance Advisor'
+  ].map(l => escapeXml(l));
+
+  // Estimate character width (~0.55 * fontSize) and reduce font size until fits
+  const maxTextWidth = Math.max(10, textWidth - textPadding * 2);
+  const approxCharWidth = (fs && fs.existsSync) ? 0.55 : 0.55; // kept for clarity
+  const fitsAtSize = (size) => {
+    const charWidth = size * approxCharWidth;
+    return lines.every(line => (line.length * charWidth) <= maxTextWidth);
+  };
+
+  // Reduce font size until all lines fit or until MIN_FONT_SIZE
+  while (allFontSize > MIN_FONT_SIZE && !fitsAtSize(allFontSize)) {
+    allFontSize = Math.max(MIN_FONT_SIZE, Math.floor(allFontSize * 0.92));
+    // safety break
+    if (allFontSize <= MIN_FONT_SIZE) break;
   }
 
   let svgLines = [];
   let y = startY;
-  svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${name}</text>`);
-  y += lineHeight;
-  svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${formattedDesignation}</text>`);
-  y += lineHeight;
-  svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">Phone: ${phone}</text>`);
-  y += lineHeight;
-  svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">IRDAI Certified Insurance Advisor</text>`);
+  for (const l of lines) {
+    svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${l}</text>`);
+    y += lineHeight;
+  }
 
   return `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
