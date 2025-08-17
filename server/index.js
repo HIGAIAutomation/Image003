@@ -3,7 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
+// Excel export removed; XLSX not required
 const db = require('./db');
 require('dotenv').config();
 
@@ -203,100 +203,7 @@ app.delete('/api/users/:id/photo', async (req, res) => {
 });
 
 // Export users to Excel (Admin only)
-app.get('/api/export-users', isAdmin, async (req, res) => {
-  try {
-    const users = await db.allUsers();
-
-    // Create workbook and worksheet
-    const workbook = XLSX.utils.book_new();
-
-    // Format data for Excel
-    const excelData = users.map(user => ({
-      ID: user.id,
-      Name: user.name,
-      Email: user.email,
-      Photo: user.photoUrl ? 'Yes' : 'No'
-    }));
-
-    // Convert data to worksheet
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-
-    // Set column widths
-    const colWidths = [
-      { wch: 15 }, // ID
-      { wch: 30 }, // Name
-      { wch: 35 }, // Email
-      { wch: 10 }  // Photo
-    ];
-    worksheet['!cols'] = colWidths;
-
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Users');
-
-    // Generate Excel file
-    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-    // Set headers for file download
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=users.xlsx');
-
-    // Send file
-    res.send(excelBuffer);
-  } catch (error) {
-    console.error('Error exporting users:', error);
-    res.status(500).json({ error: 'Failed to export users' });
-  }
-});
-    
-// Export member sheet to Excel (Admin only)
-app.get('/api/export-members', isAdmin, async (req, res) => {
-  try {
-    const users = await db.allUsers();
-
-    // Create workbook and worksheet
-    const workbook = XLSX.utils.book_new();
-
-    // Format data for Excel
-    const excelData = users.map(user => ({
-      'Member ID': user.id,
-      'Full Name': user.name,
-      'Email': user.email,
-      'Phone': user.phone || 'N/A',
-      'Designation': user.designation || 'N/A',
-      'Photo Status': user.photoUrl ? 'Available' : 'Not Available'
-    }));
-
-    // Convert data to worksheet
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-
-    // Set column widths
-    const colWidths = [
-      { wch: 15 }, // Member ID
-      { wch: 30 }, // Full Name
-      { wch: 35 }, // Email
-      { wch: 15 }, // Phone
-      { wch: 25 }, // Designation
-      { wch: 15 }  // Photo Status
-    ];
-    worksheet['!cols'] = colWidths;
-
-    // Add the worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'User List');
-
-    // Create buffer
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-
-    // Set response headers
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=user_list.xlsx');
-
-    // Send the file
-    res.send(excelBuffer);
-  } catch (error) {
-    console.error('Error exporting Excel:', error);
-    res.status(500).json({ error: 'Failed to export Excel file' });
-  }
-});
+// Excel export endpoints removed
 
 const startServer = async () => {
   await db.connect();

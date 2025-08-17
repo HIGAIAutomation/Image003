@@ -12,15 +12,13 @@ const allowedOrigins = [
 
 const path = require('path');
 
-const { saveToExcel, getMembersByDesignation, getAllUsers, deleteUser, updateUser } = require('./utils/excel');
+const { getMembersByDesignation } = require('./utils/excel');
 const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
 const { sendEmail, testEmailConfiguration } = require('./utils/emailSender');
 const db = require('./db');
 
 const app = express();
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
-const OUTPUT_DIR = path.join(__dirname, 'output');
-const EXCEL_PATH = path.join(OUTPUT_DIR, 'members.xlsx');
 const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -356,31 +354,7 @@ app.get('/api/ping', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is live!' });
 });
 
-// Export members Excel (admin only). Supports either signed admin cookie or ?isAdmin=true for quick testing.
-app.get('/api/export-members', (req, res) => {
-  try {
-    const isAdminQuery = req.query.isAdmin === 'true';
-    const token = req.signedCookies && req.signedCookies[ADMIN_COOKIE_NAME];
-    if (!isAdminQuery && !token) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
-    if (!fs.existsSync(EXCEL_PATH)) {
-      return res.status(404).json({ error: 'Members file not found' });
-    }
-
-    // Use res.download so browser prompts a save dialog
-    return res.download(EXCEL_PATH, 'members.xlsx', err => {
-      if (err) {
-        console.error('Error sending members.xlsx:', err);
-        if (!res.headersSent) res.status(500).json({ error: 'Failed to download file' });
-      }
-    });
-  } catch (error) {
-    console.error('Export members error:', error);
-    res.status(500).json({ error: 'Failed to export members' });
-  }
-});
+// Excel export removed: endpoint disabled per configuration
 
 const PORT = process.env.PORT || 3001;
 const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;

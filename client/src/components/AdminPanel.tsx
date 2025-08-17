@@ -81,33 +81,7 @@ const AdminPanel: React.FC = () => {
   // Backend status
   const [backendStatus, setBackendStatus] = useState<'online' | 'offline' | 'pinging'>('pinging');
   
-  // Excel export
-  const handleExportExcel = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}api/export-members?isAdmin=true`, {
-        method: 'GET',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to export Excel');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'user_list.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      message.success('Excel file downloaded successfully');
-    } catch (error) {
-      console.error('Error exporting Excel:', error);
-      message.error('Failed to export Excel file');
-    }
-  };
+  // Excel export removed
 
   // Confirm modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -409,27 +383,12 @@ const AdminPanel: React.FC = () => {
   // ------------------ Render helpers ------------------
   const renderDashboardCards = (isMobile: boolean) => (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <button
-          onClick={handleExportExcel}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-        >
-          <AiOutlineDownload className="w-5 h-5" />
-          <span>Export to Excel</span>
-        </button>
-      </div>
+  <div className="flex justify-end">{/* export removed */}</div>
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-6">
       {isMobile ? (
         <>
-          <div className="flex flex-col gap-2 col-span-2">
+            <div className="flex flex-col gap-2 col-span-2">
             <MobileDashboardCard title="Total Users" value={loading ? '-' : dashboardStats.totalUsers} icon="👥" />
-            <button
-              onClick={handleExportExcel}
-              className="flex items-center justify-center gap-2 w-full bg-blue-50 text-blue-600 p-2 rounded-lg hover:bg-blue-100 transition-colors"
-            >
-              <AiOutlineDownload className="w-5 h-5" />
-              <span>Export to Excel</span>
-            </button>
           </div>
           <MobileDashboardCard title="Health Advisors" value={loading ? '-' : dashboardStats.healthAdvisors} icon="⚕️" />
           <MobileDashboardCard title="Wealth Managers" value={loading ? '-' : dashboardStats.wealthManagers} icon="📈" />
@@ -443,15 +402,7 @@ const AdminPanel: React.FC = () => {
               title="Total Users" 
               value={loading ? '-' : dashboardStats.totalUsers} 
               description={
-                <div className="mt-2">
-                  <button
-                    onClick={handleExportExcel}
-                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
-                  >
-                    <AiOutlineDownload className="w-5 h-5" />
-                    <span>Export to Excel</span>
-                  </button>
-                </div>
+                <div className="mt-2">{/* export removed */}</div>
               } 
               icon="👥" 
             />
@@ -694,13 +645,7 @@ const AdminPanel: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-4 flex justify-between items-center">
           <div className="flex items-center gap-4">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Marketing Poster</h1>
-            <button
-              onClick={handleExportExcel}
-              className="flex items-center gap-2 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors text-sm"
-            >
-              <AiOutlineDownload className="w-5 h-5" />
-              <span className="hidden sm:inline">Export Users</span>
-            </button>
+            {/* Export users removed */}
             {backendStatus !== 'offline' && (
               <span
                 className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-full font-medium ${
