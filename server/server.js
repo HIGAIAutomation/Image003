@@ -1,38 +1,22 @@
-<<<<<<< HEAD
-// server.js
-=======
->>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
 const cors = require('cors');
-<<<<<<< HEAD
 const cookieParser = require('cookie-parser');
-const allowedOrigins = [
-  'https://abuinshah.netlify.app',
-  'http://localhost:5173'  // Remove trailing slash
-];
-
 const path = require('path');
+const nodemailer = require('nodemailer');
 
-const { getMembersByDesignation } = require('./utils/excel');
+// Import required modules
 const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
 const { sendEmail, testEmailConfiguration } = require('./utils/emailSender');
 const db = require('./db');
-=======
-const nodemailer = require('nodemailer');
-const XLSX = require('xlsx');
-const path = require('path');
-
-const { saveToExcel, getMembersByDesignation, getAllUsers, deleteUser, updateUser } = require('./utils/excel');
-const { processCircularImage, generateFooterSVG, createFinalPoster } = require('./utils/image');
->>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 
 const app = express();
+
+// Configure paths
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const OUTPUT_DIR = path.join(__dirname, 'output');
-<<<<<<< HEAD
 const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 
 // Create necessary directories if they don't exist
@@ -40,14 +24,20 @@ const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
+// Configure multer for file uploads
 const upload = multer({ 
-  dest: UPLOADS_DIR,
-  limits: { fileSize: 5 * 1024 * 1024 }
+    dest: UPLOADS_DIR,
+    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-// Move CORS configuration before routes
+// Configure CORS
+const allowedOrigins = [
+    'https://abuinshah.netlify.app',
+    'http://localhost:5173'
+];
+
 app.use(cors({
-  origin: function(origin, callback) {
+    origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
@@ -67,29 +57,16 @@ app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
-=======
-const EXCEL_PATH = path.join(OUTPUT_DIR, 'members.xlsx');
-const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
-
-// Create required directories
-if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-
-const upload = multer({ 
-  dest: UPLOADS_DIR,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  }
-});
-
-// Error handling middleware
->>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
+// Configure middleware
+app.use(express.json());
+app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
+app.use('/uploads', express.static(UPLOADS_DIR));
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-<<<<<<< HEAD
+// Get all users
 app.get('/api/users', async (req, res) => {
   try {
     const users = await db.allUsers();
@@ -101,13 +78,6 @@ app.get('/api/users', async (req, res) => {
     res.json(normalized);
   } catch (error) {
     console.error('Fetch users error:', error);
-=======
-app.use(cors());
-app.use(express.json());
-app.use('/uploads', express.static(UPLOADS_DIR));
-
-// Get all users
-app.get('/api/users', (req, res) => {
   try {
     const users = getAllUsers(EXCEL_PATH);
     res.json(users);
@@ -128,26 +98,15 @@ app.delete('/api/users/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Delete user error:', error);
-=======
-// Delete user
-app.delete('/api/users/:id', (req, res) => {
-  try {
-    deleteUser(EXCEL_PATH, req.params.id);
-    res.json({ success: true });
-  } catch (error) {
->>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });
-
-<<<<<<< HEAD
 app.post('/api/register', upload.single('photo'), async (req, res) => {
   try {
     const { name, phone, email, designation } = req.body;
     if (!name || !phone || !email || !designation) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-=======
 // Register new member
 app.post('/api/register', upload.single('photo'), async (req, res) => {
   try {
@@ -157,27 +116,30 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
     if (!name || !phone || !email || !designation) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    
->>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
     if (!req.file) {
       return res.status(400).json({ error: 'Photo is required' });
     }
 
-<<<<<<< HEAD
+    // Process photo
     const filenameSafe = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const finalPhotoPath = `uploads/${filenameSafe}_${Date.now()}.jpeg`;
+    const finalPhotoPath = path.join('uploads', `${filenameSafe}_${Date.now()}.jpeg`);
     try {
       if (!fs.existsSync(req.file.path)) throw new Error('Uploaded file not found');
       await processCircularImage(req.file.path, finalPhotoPath, 200);
       if (!fs.existsSync(finalPhotoPath)) throw new Error('Failed to save processed image');
-  try { await fs.promises.unlink(req.file.path); } catch (e) { console.warn('Cleanup error (ignored):', e.message || e); }
+      try { 
+        await fs.promises.unlink(req.file.path); 
+      } catch (e) { 
+        console.warn('Cleanup error (ignored):', e.message || e); 
+      }
     } catch (err) {
       console.error('Image processing failed:', err);
       try {
-        if (fs.existsSync(req.file.path)) fs.renameSync(req.file.path, finalPhotoPath);
-        else throw new Error('No valid image file available');
-=======
-    // Process photo
+        if (fs.existsSync(req.file.path)) {
+          await fs.promises.rename(req.file.path, finalPhotoPath);
+        } else {
+          throw new Error('No valid image file available');
+        }
     const filenameSafe = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const finalPhotoPath = `uploads/${filenameSafe}_${Date.now()}.jpeg`;
 
