@@ -11,7 +11,9 @@ const compression = require('compression');
 const allowedOrigins = [
   'https://abuinshah.netlify.app',
   'https://wealthplusdesign.netlify.app',
-  'http://localhost:5173'  // Remove trailing slash
+  'https://wealthplusdesigns.netlify.app', // Added this domain
+  'http://localhost:5173',
+  'http://localhost:3000'
 ];
 
 const path = require('path');
@@ -26,6 +28,9 @@ const UPLOADS_DIR = path.join(__dirname, 'uploads');
 const OUTPUT_DIR = path.join(__dirname, 'output');
 const EXCEL_PATH = path.join(OUTPUT_DIR, 'members.xlsx');
 const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
+
+// Import admin routes
+const adminRoutes = require('./routes/admin');
 
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -70,23 +75,52 @@ app.use(limiter);
 app.use(compression());
 
 // CORS configuration
+// Log middleware to debug requests
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Origin: ${req.get('origin')}`);
+  next();
+});
+
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    console.log('Request from origin:', origin);
+    
+    // Allow requests with no origin (like mobile apps, curl requests, or local files)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
-      return callback(new Error('CORS policy violation'), false);
+    // Check against allowed origins
+    const isAllowed = allowedOrigins.some(allowed => {
+      // Convert both to lowercase for case-insensitive comparison
+      return origin.toLowerCase() === allowed.toLowerCase();
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`Blocked request from unauthorized origin: ${origin}`);
+      callback(new Error('CORS policy violation'));
     }
-    return callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+  exposedHeaders: ['Set-Cookie', 'Authorization']
 }));
 
 app.use(express.json());
 app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
+
+// Mount admin routes
+app.use('/api/admin', adminRoutes.router);
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    env: process.env.NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../client/dist')));
@@ -254,8 +288,10 @@ const ADMIN_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true, // must be true for cross-site cookies
   sameSite: 'none', // must be 'none' for cross-site cookies
-  maxAge: 24 * 60 * 60 * 1000,
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
   signed: true,
+  path: '/', // ensure cookie is available for all paths
+  domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // allow subdomain access in production
 };
 
 const crypto = require('crypto');
@@ -288,15 +324,19 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// Admin auth check: verify cookie
-app.get('/api/admin/auth', (req, res) => {
+// Admin auth check handler
+function handleAuthCheck(req, res) {
   const token = req.signedCookies[ADMIN_COOKIE_NAME];
   if (token) {
     res.json({ authenticated: true });
   } else {
     res.status(401).json({ authenticated: false });
   }
-});
+}
+
+// Admin auth check: support both URL formats for backward compatibility
+app.get('/api/admin-auth', handleAuthCheck);
+app.get('/api/admin/auth', handleAuthCheck);
 
 // Admin logout: clear cookie
 app.post('/api/admin/logout', (req, res) => {
