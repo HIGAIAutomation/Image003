@@ -1,9 +1,28 @@
+// Load environment variables explicitly from the .env file in this directory
+require('dotenv').config({ path: __dirname + '/.env' });
 const mongoose = require('mongoose');
-const path = require('path');
-require('dotenv').config();
 
-const MONGO_URI = process.env.MONGO_URI;
-console.log(MONGO_URI);
+// MongoDB connection setup
+const envMongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
+const mongoURI = envMongoURI ? envMongoURI.trim() : null;
+
+if (!mongoURI) {
+  console.error('MongoDB connection error: No connection string provided in environment variables.');
+  process.exit(1);
+}
+
+if (!/^mongodb(?:\+srv)?:\/\//.test(mongoURI)) {
+  console.error('MongoDB connection error: Invalid connection string format. Please check your .env file.');
+  process.exit(1);
+}
+
+try {
+  const { ConnectionString } = require('mongodb-connection-string-url');
+  new ConnectionString(mongoURI);
+} catch (e) {
+  console.error('MongoDB connection error: Invalid connection string structure.', e);
+  process.exit(1);
+}
 
 mongoose.set('strictQuery', false);
 // Disable buffering of model operations until connected - fail fast instead of timing out
@@ -11,13 +30,11 @@ mongoose.set('bufferCommands', false);
 
 const connect = async () => {
   try {
-    await mongoose.connect(MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    await mongoose.connect(mongoURI, {
       serverSelectionTimeoutMS: 10000,
       connectTimeoutMS: 20000
     });
-    console.log('Connected to MongoDB:', MONGO_URI);
+    console.log('Connected to MongoDB');
   } catch (err) {
     console.error('MongoDB connection error:', err && err.message ? err.message : err);
     throw err;
@@ -65,13 +82,12 @@ module.exports = {
       photo: user.photo || (user.photoUrl ? user.photoUrl.split('/').pop() : null)
     }));
   },
-  updateUser: async (id, changes) => await User.findOneAndUpdate({ id }, changes, { new: true }),
-    updateUser: async (id, changes) => {
-      if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
-      return await User.findOneAndUpdate({ id }, changes, { new: true });
-    },
-    deleteUser: async (id) => {
-      if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
-      return await User.findOneAndDelete({ id });
-    }
+  updateUser: async (id, changes) => {
+    if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
+    return await User.findOneAndUpdate({ id }, changes, { new: true });
+  },
+  deleteUser: async (id) => {
+    if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
+    return await User.findOneAndDelete({ id });
+  }
 };

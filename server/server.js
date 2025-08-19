@@ -1,6 +1,8 @@
 require('dotenv').config();
 
 // Import required modules
+const sharp = require('sharp');
+const { createCanvas, loadImage } = require('canvas');
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs').promises; // Use async promises version
@@ -34,6 +36,93 @@ const createDirs = async () => {
     }
 };
 
+// Image Processing Functions
+async function processCircularImage(inputPath, outputPath, size = 200) {
+    try {
+        const imageBuffer = await sharp(inputPath)
+            .resize(size, size, {
+                fit: 'cover',
+                position: 'center'
+            })
+            .toFormat('png')
+            .toBuffer();
+
+        const canvas = createCanvas(size, size);
+        const ctx = canvas.getContext('2d');
+
+        // Create circular clipping path
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+
+        // Load and draw the image
+        const image = await loadImage(imageBuffer);
+        ctx.drawImage(image, 0, 0, size, size);
+
+        // Convert to buffer and save
+        const finalBuffer = await sharp(canvas.toBuffer())
+            .toFormat('jpeg')
+            .toFile(outputPath);
+
+        return outputPath;
+    } catch (error) {
+        console.error('Error in processCircularImage:', error);
+        throw error;
+    }
+}
+
+async function createFinalPoster({ templatePath, person, logoPath, outputPath }) {
+    try {
+        // Load images
+        const template = await loadImage(templatePath);
+        const photo = await loadImage(person.photo);
+        const logo = await loadImage(logoPath);
+
+        // Create canvas with template dimensions
+        const canvas = createCanvas(template.width, template.height);
+        const ctx = canvas.getContext('2d');
+
+        // Draw template
+        ctx.drawImage(template, 0, 0);
+
+        // Calculate positions (you may need to adjust these based on your template)
+        const photoSize = Math.min(template.width, template.height) * 0.2; // 20% of smallest dimension
+        const photoX = template.width * 0.1; // 10% from left
+        const photoY = template.height * 0.1; // 10% from top
+
+        // Draw circular photo
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(photoX + photoSize/2, photoY + photoSize/2, photoSize/2, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(photo, photoX, photoY, photoSize, photoSize);
+        ctx.restore();
+
+        // Draw logo (adjust position as needed)
+        const logoSize = photoSize * 0.5;
+        ctx.drawImage(logo, template.width - logoSize - 20, template.height - logoSize - 20, logoSize, logoSize);
+
+        // Add text
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 48px Arial';
+        ctx.fillText(person.name, photoX, photoY + photoSize + 60);
+        
+        ctx.font = '36px Arial';
+        ctx.fillText(person.designation, photoX, photoY + photoSize + 110);
+
+        // Save the final image
+        const buffer = canvas.toBuffer('image/jpeg');
+        await sharp(buffer).toFile(outputPath);
+
+        return outputPath;
+    } catch (error) {
+        console.error('Error in createFinalPoster:', error);
+        throw error;
+    }
+}
+
 // Configure multer for file uploads
 const upload = multer({ 
     dest: UPLOADS_DIR,
@@ -64,6 +153,36 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser(ADMIN_TOKEN_SECRET)); // Use a secret from an env variable
 
+// Admin authentication endpoints
+app.post('/api/admin/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        res.cookie('admin_token', ADMIN_TOKEN_SECRET, {
+            signed: true,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.post('/api/admin/logout', (req, res) => {
+    res.clearCookie('admin_token');
+    res.clearCookie('adminToken'); // Clear both for backward compatibility
+    res.json({ success: true });
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '../client/dist')));
 app.use('/uploads', express.static(UPLOADS_DIR));
@@ -80,11 +199,23 @@ function generateToken() {
     return crypto.randomBytes(32).toString('hex');
 }
 
-// Admin authorization middleware - IMPROVED
+// Admin authorization middleware
 function isAdmin(req, res, next) {
-    const token = req.signedCookies.admin_token;
-    if (token) return next();
-    return res.status(403).json({ error: 'Admin access required' });
+    try {
+        const token = req.signedCookies.admin_token || req.cookies.adminToken;
+        if (!token) {
+            return res.status(403).json({ error: 'No token provided' });
+        }
+        
+        if (token !== ADMIN_TOKEN_SECRET) {
+            return res.status(403).json({ error: 'Invalid token' });
+        }
+        
+        next();
+    } catch (err) {
+        console.error('Auth error:', err);
+        res.status(403).json({ error: 'Not authorized' });
+    }
 }
 
 // --- API Endpoints ---
@@ -195,7 +326,7 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
 });
 
 // Send posters
-app.post('/api/send-posters', isAdmin, upload.single('template'), async (req, res) => {
+app.post('/api/send-posters', upload.single('template'), async (req, res) => {
     try {
         const { designation } = req.body;
         if (!req.file) {
