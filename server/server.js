@@ -273,7 +273,7 @@ function isAdmin(req, res, next) {
 }
 
 // Admin login: set secure cookie
-app.post('/api/admin-login', (req, res) => {
+app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   const validUsername = process.env.ADMIN_USERNAME;
   const validPassword = process.env.ADMIN_PASSWORD;
@@ -289,7 +289,7 @@ app.post('/api/admin-login', (req, res) => {
 });
 
 // Admin auth check: verify cookie
-app.get('/api/admin-auth', (req, res) => {
+app.get('/api/admin/auth', (req, res) => {
   const token = req.signedCookies[ADMIN_COOKIE_NAME];
   if (token) {
     res.json({ authenticated: true });
