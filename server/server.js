@@ -5,8 +5,12 @@ const multer = require('multer');
 const fs = require('fs');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const allowedOrigins = [
   'https://abuinshah.netlify.app',
+  'https://wealthplusdesign.netlify.app',
   'http://localhost:5173'  // Remove trailing slash
 ];
 
@@ -26,12 +30,46 @@ const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+// Configure multer for file uploads with additional security
 const upload = multer({ 
   dest: UPLOADS_DIR,
-  limits: { fileSize: 5 * 1024 * 1024 }
+  limits: { 
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+    files: 1 // Only allow 1 file per request
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow only images
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed!'));
+    }
+    cb(null, true);
+  }
 });
 
 // Move CORS configuration before routes
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "blob:", "data:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"]
+    }
+  }
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use(limiter);
+
+// Compress responses
+app.use(compression());
+
+// CORS configuration
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -95,6 +133,21 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
     }
     if (!req.file) {
       return res.status(400).json({ error: 'Photo is required' });
+    }
+
+    // Check if user with this email already exists
+    const existingUser = await db.getUserByEmail(email);
+    if (existingUser) {
+      // Delete the uploaded file since we won't use it
+      try { 
+        if (req.file && req.file.path) {
+          await fs.promises.unlink(req.file.path);
+        }
+      } catch (e) { /* ignore cleanup error */ }
+      return res.status(400).json({ 
+        error: 'Email already registered',
+        message: '❌ A user with this email address is already registered'
+      });
     }
 
     const filenameSafe = name.replace(/[^a-z0-9]/gi, '_').toLowerCase();

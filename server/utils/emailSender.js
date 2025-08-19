@@ -77,8 +77,23 @@ function generateEmailContent(data) {
 
 async function sendEmail(data, imagePath) {
   try {
+    // Validate input
+    if (!data || !data.Email || !data.Name || !data.Designation) {
+      throw new Error('Missing required email data');
+    }
+
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      throw new Error('Image file not found');
+    }
+
+    // Create and verify transporter
     const transporter = createTransporter();
-    await transporter.verify();
+    try {
+      await transporter.verify();
+    } catch (err) {
+      console.error('Email transport verification failed:', err);
+      throw new Error('Email service not available');
+    }
 
     const subject = generateSubject(data.Designation);
     const htmlContent = generateEmailContent(data);
