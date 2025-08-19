@@ -19,10 +19,13 @@ const db = require('./db');
 
 const app = express();
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+const OUTPUT_DIR = path.join(__dirname, 'output');
 const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 
-if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+// Create necessary directories if they don't exist
+[UPLOADS_DIR, OUTPUT_DIR].forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
 
 const upload = multer({ 
   dest: UPLOADS_DIR,
@@ -168,13 +171,56 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
       totalRecipients += recipients.length;
       
       for (const person of recipients) {
-        const finalImagePath = `uploads/final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`;
+        const finalImagePath = path.join(OUTPUT_DIR, `final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`);
         try {
-          await createFinalPoster({ templatePath, person, logoPath: LOGO_PATH, outputPath: finalImagePath });
-          await sendEmail({ Name: person.name, Email: person.email, Phone: person.phone, Designation: person.designation }, finalImagePath);
-    try { await fs.promises.unlink(finalImagePath); } catch (e) { console.warn(`Cleanup failed for ${person.name} (ignored):`, e.message || e); }
+          // Get the correct photo path
+          let photoPath = person.photo;
+          
+          // If it's a relative path, make it absolute
+          if (photoPath && !path.isAbsolute(photoPath)) {
+            // If it starts with uploads/, it's relative to server root
+            if (photoPath.startsWith('uploads/')) {
+              photoPath = path.join(__dirname, photoPath);
+            } else {
+              photoPath = path.join(UPLOADS_DIR, photoPath);
+            }
+          }
+
+          // Try photoUrl if photo path is not valid
+          if (!photoPath && person.photoUrl) {
+            photoPath = path.join(UPLOADS_DIR, path.basename(person.photoUrl));
+          }
+
+          if (!photoPath || !fs.existsSync(photoPath)) {
+            throw new Error(`Invalid or missing photo for ${person.name}. Checked paths: ${person.photo}, ${photoPath}`);
+          }
+
+          await createFinalPoster({
+            templatePath,
+            person: {
+              ...person,
+              photo: photoPath
+            },
+            logoPath: LOGO_PATH,
+            outputPath: finalImagePath
+          });
+
+          await sendEmail({
+            Name: person.name,
+            Email: person.email,
+            Phone: person.phone,
+            Designation: person.designation
+          }, finalImagePath);
+
+          // Clean up the generated image
+          try {
+            await fs.promises.unlink(finalImagePath);
+          } catch (e) {
+            console.warn(`Cleanup failed for ${person.name}'s image (ignored):`, e.message);
+          }
         } catch (err) {
           console.error(`Failed for ${person.name}:`, err);
+          continue; // Continue with next person even if one fails
         }
       }
     }

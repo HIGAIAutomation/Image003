@@ -50,12 +50,19 @@ module.exports = {
     if (!designation) return [];
     const desig = designation.toLowerCase();
     // match exact or comma-separated lists (case-insensitive)
-    return await User.find({
+    const users = await User.find({
       designation: { $exists: true, $ne: null },
       $expr: {
         $in: [desig, { $map: { input: { $split: [{ $toLower: '$designation' }, ','] }, as: 'd', in: { $trim: { input: '$$d' } } } } ]
       }
     }).lean();
+
+    // Ensure each user has a valid photo field
+    return users.map(user => ({
+      ...user,
+      // If photo exists, use it; otherwise try photoUrl
+      photo: user.photo || (user.photoUrl ? user.photoUrl.split('/').pop() : null)
+    }));
   },
   updateUser: async (id, changes) => await User.findOneAndUpdate({ id }, changes, { new: true }),
     updateUser: async (id, changes) => {

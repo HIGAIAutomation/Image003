@@ -111,9 +111,39 @@ async function processCircularImage(inputPath, outputPath, size) {
  * Creates the final composite poster.
  */
 async function createFinalPoster({ templatePath, person, logoPath, outputPath }) {
-  const templateResized = await sharp(templatePath).resize({ width: 800 }).toBuffer();
-  const templateMetadata = await sharp(templateResized).metadata();
-  const width = templateMetadata.width;
+  try {
+    // Validate inputs
+    if (!templatePath || !person || !logoPath || !outputPath) {
+      throw new Error('Missing required parameters');
+    }
+
+    // Validate person object
+    if (!person.name || !person.photo || !person.designation) {
+      throw new Error('Missing required person information');
+    }
+
+    // Ensure template exists and is readable
+    if (!fs.existsSync(templatePath)) {
+      throw new Error(`Template file not found: ${templatePath}`);
+    }
+
+    // Create a temporary copy of the template to avoid file locking issues
+    const tempTemplatePath = `${templatePath}_temp`;
+    await fs.promises.copyFile(templatePath, tempTemplatePath);
+
+    const templateResized = await sharp(tempTemplatePath)
+      .resize({ width: 800 })
+      .toBuffer();
+    
+    // Clean up temp file
+    try {
+      fs.unlinkSync(tempTemplatePath);
+    } catch (err) {
+      console.warn('Template cleanup failed (ignored):', err.message);
+    }
+
+    const templateMetadata = await sharp(templateResized).metadata();
+    const width = templateMetadata.width;
 
   const photoSize = Math.floor(width * 0.18);
   const fontSize = Math.round(width * 0.022); // ~18px for 800px width
@@ -219,6 +249,10 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     .toBuffer();
 
   fs.writeFileSync(outputPath, finalImageBuffer);
+  } catch (error) {
+    console.error('Error in createFinalPoster:', error);
+    throw error;
+  }
 }
 
 module.exports = {
