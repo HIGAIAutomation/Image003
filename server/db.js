@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config();
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/abuinshah';
+const MONGO_URI = process.env.MONGO_URI;
+console.log(MONGO_URI);
 
 mongoose.set('strictQuery', false);
 // Disable buffering of model operations until connected - fail fast instead of timing out
