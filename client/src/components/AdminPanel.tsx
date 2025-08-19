@@ -54,8 +54,8 @@ const DesktopDashboardCard: React.FC<{ title: string; value: string | number; de
       </div>
       <div>
         <h3 className="font-semibold text-gray-600 text-sm mb-1">{title}</h3>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-        <p className="text-xs text-gray-500 mt-1">{description}</p>
+        <span className="text-2xl font-bold text-gray-900">{value}</span>
+        <span className="text-xs text-gray-500 mt-1">{description}</span>
       </div>
     </div>
   </div>
@@ -211,7 +211,7 @@ const AdminPanel: React.FC = () => {
     setConfirmMessage('Are you sure you want to delete this user? This cannot be undone.');
     setConfirmAction(() => async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}api/users/${id}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE_URL}api/users/${id}`, { method: 'DELETE', credentials: 'include' });
         if (!response.ok) throw new Error('Failed to delete user.');
         const updated = users.filter(u => u.id !== id);
         setUsers(updated);
@@ -239,6 +239,7 @@ const AdminPanel: React.FC = () => {
       const response = await fetch(`${API_BASE_URL}api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(editingUser),
       });
       const data = await response.json();

@@ -43,7 +43,7 @@ function saveToExcel(data) {
 
     const existingUser = worksheetData.find(user => user.email === data.email);
     if (existingUser) {
-      throw new Error(`This email is already registered as a ${existingUser.designation}. Each email can only be used once.`);
+      throw new Error(`This email is already registered. Each email can only be used once.`);
     }
 
     worksheetData.push(data);
@@ -68,7 +68,6 @@ function getMembersByDesignation(designation, excelPath) {
   const workbook = XLSX.readFile(excelPath);
   if (!workbook.SheetNames.includes('Members')) return [];
   const allMembers = XLSX.utils.sheet_to_json(workbook.Sheets['Members']);
-<<<<<<< HEAD
   return allMembers.filter(member =>
     member.designation &&
     member.designation
@@ -76,9 +75,6 @@ function getMembersByDesignation(designation, excelPath) {
       .map(d => d.trim().toLowerCase())
       .includes(designation.toLowerCase())
   );
-=======
-  return allMembers.filter(member => member.designation === designation);
->>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 }
 
 // Update existing user
@@ -98,7 +94,7 @@ function updateUser(excelPath, userId, updatedData) {
       index !== userIndex && user.email === updatedData.email
     );
     if (existingUser) {
-      throw new Error(`This email is already registered as a ${existingUser.designation}. Each email can only be used once.`);
+      throw new Error(`This email is already registered. Each email can only be used once.`);
     }
   }
 

@@ -1,6 +1,7 @@
 // Load environment variables explicitly from the .env file in this directory
 require('dotenv').config({ path: __dirname + '/.env' });
 const mongoose = require('mongoose');
+const path = require('path');
 
 // MongoDB connection setup
 const envMongoURI = process.env.MONGO_URI || process.env.MONGODB_URI;
@@ -78,13 +79,26 @@ module.exports = {
     // Ensure each user has a valid photo field
     return users.map(user => ({
       ...user,
-      // If photo exists, use it; otherwise try photoUrl
-      photo: user.photo || (user.photoUrl ? user.photoUrl.split('/').pop() : null)
+      // Use full path for photo if photoUrl exists, otherwise use photo field
+      photo: user.photoUrl ? path.join(__dirname, user.photoUrl.startsWith('/') ? user.photoUrl.slice(1) : user.photoUrl) : user.photo
     }));
+  },
+  getUserByEmail: async (email) => {
+    if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
+    return await User.findOne({ email }).lean();
   },
   updateUser: async (id, changes) => {
     if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
-    return await User.findOneAndUpdate({ id }, changes, { new: true });
+    // First get the existing user to preserve photo fields
+    const existingUser = await User.findOne({ id }).lean();
+    if (!existingUser) return null;
+    // Preserve photo fields unless explicitly updated
+    const updateData = {
+      ...changes,
+      photoUrl: changes.photoUrl || existingUser.photoUrl,
+      photo: changes.photo || existingUser.photo
+    };
+    return await User.findOneAndUpdate({ id }, updateData, { new: true }).lean();
   },
   deleteUser: async (id) => {
     if (mongoose.connection.readyState !== 1) throw new Error('Not connected to MongoDB');
