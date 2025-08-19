@@ -68,6 +68,7 @@ function getMembersByDesignation(designation, excelPath) {
   const workbook = XLSX.readFile(excelPath);
   if (!workbook.SheetNames.includes('Members')) return [];
   const allMembers = XLSX.utils.sheet_to_json(workbook.Sheets['Members']);
+<<<<<<< HEAD
   return allMembers.filter(member =>
     member.designation &&
     member.designation
@@ -75,6 +76,9 @@ function getMembersByDesignation(designation, excelPath) {
       .map(d => d.trim().toLowerCase())
       .includes(designation.toLowerCase())
   );
+=======
+  return allMembers.filter(member => member.designation === designation);
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 }
 
 // Update existing user

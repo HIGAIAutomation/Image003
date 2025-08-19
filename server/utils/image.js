@@ -1,6 +1,7 @@
 const sharp = require('sharp');
 const fs = require('fs');
 
+<<<<<<< HEAD
 /**
  * Generates an SVG containing text information.
  *
@@ -84,13 +85,39 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
         }
       </style>
       ${svgLines.join('\n')}
+=======
+function generateFooterSVG(name, designation, phone, email, textWidth, footerHeight, fontSize) {
+  const spacing = fontSize + 6;
+  const startX = 5;
+  const startY = fontSize;
+
+  return `
+    <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="gradText" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#1B75BB; stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#252A78; stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <style>
+        .text { font-family: Arial, sans-serif; fill: url(#gradText); font-weight: bold; }
+        .normal { font-size: ${fontSize}px; }
+      </style>
+      <text x="${startX}" y="${startY}" class="text normal">Name: ${name}</text>
+      <text x="${startX}" y="${startY + spacing}" class="text normal">Email: ${email}</text>
+      <text x="${startX}" y="${startY + 2 * spacing}" class="text normal">Designation: ${designation}</text>
+      <text x="${startX}" y="${startY + 3 * spacing}" class="text normal">Phone No: ${phone}</text>
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
     </svg>
   `;
 }
 
+<<<<<<< HEAD
 /**
  * Crops an image into a circle.
  */
+=======
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 async function processCircularImage(inputPath, outputPath, size) {
   const circleMask = Buffer.from(
     `<svg width="${size}" height="${size}">
@@ -107,6 +134,7 @@ async function processCircularImage(inputPath, outputPath, size) {
   fs.writeFileSync(outputPath, buffer);
 }
 
+<<<<<<< HEAD
 /**
  * Creates the final composite poster.
  */
@@ -173,6 +201,21 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     textWidth,
     footerHeight,
     fontSize
+=======
+async function createFinalPoster({ templatePath, person, logoPath, outputPath }) {
+  const templateResized = await sharp(templatePath).resize({ width: 800 }).toBuffer();
+  const templateMetadata = await sharp(templateResized).metadata();
+  const width = templateMetadata.width;
+
+  const photoSize = Math.floor(width * 0.15);
+  const fontSize = Math.floor(photoSize * 0.14);
+  const spacing = fontSize + 6;
+  const textWidth = width - (photoSize * 2) - 100;
+
+  const footerSVG = generateFooterSVG(
+    person.name, person.designation, person.phone, person.email,
+    textWidth, spacing * 5, fontSize
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
   );
 
   const textBuffer = await sharp(Buffer.from(footerSVG)).png().toBuffer();
@@ -191,8 +234,13 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 
   const resizedLogo = await sharp(logoPath)
     .resize({
+<<<<<<< HEAD
       width: logoSize,
       height: logoSize,
+=======
+      width: photoSize,
+      height: photoSize,
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
       fit: 'contain',
       background: { r: 240, g: 247, b: 255 }
     })
@@ -200,6 +248,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     .jpeg()
     .toBuffer();
 
+<<<<<<< HEAD
   // Move vertical line and logo relative to measured text width
   const rightSectionStart = textLeft + textMetadata.width + 10;
   const lineX = Math.min(textLeft + textWidth + 8, rightSectionStart + 8);
@@ -215,6 +264,9 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
 
   const lineSVG = `<svg width="${lineWidth}" height="${lineHeightSVG}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${lineWidth}" height="${lineHeightSVG}" fill="#1B75BB"/></svg>`;
   const lineBuffer = await sharp(Buffer.from(lineSVG)).png().toBuffer();
+=======
+  const footerHeight = Math.max(photoSize, textMetadata.height, photoSize) + 20;
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 
   const gradientFooterBuffer = await sharp({
     create: {
@@ -225,10 +277,16 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     }
   })
     .composite([
+<<<<<<< HEAD
       { input: circularPhoto, top: Math.floor((footerHeight - photoSize) / 2), left: photoLeft },
       { input: textBuffer, top: Math.floor((footerHeight - textMetadata.height) / 2), left: textLeft },
       { input: lineBuffer, top: lineY, left: lineX },
       { input: resizedLogo, top: Math.floor((footerHeight - logoSize) / 2), left: logoXCentered },
+=======
+      { input: circularPhoto, top: Math.floor((footerHeight - photoSize) / 2), left: 50 },
+      { input: textBuffer, top: Math.floor((footerHeight - textMetadata.height) / 2), left: photoSize + 70 },
+      { input: resizedLogo, top: Math.floor((footerHeight - photoSize) / 2), left: width - photoSize - 60 },
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
     ])
     .jpeg()
     .toBuffer();
@@ -249,14 +307,21 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     .toBuffer();
 
   fs.writeFileSync(outputPath, finalImageBuffer);
+<<<<<<< HEAD
   } catch (error) {
     console.error('Error in createFinalPoster:', error);
     throw error;
   }
+=======
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
 }
 
 module.exports = {
   generateFooterSVG,
   processCircularImage,
   createFinalPoster,
+<<<<<<< HEAD
 };
+=======
+};
+>>>>>>> 53d274ac712e0de6fbb84405e2bad1fcb664a5e5
