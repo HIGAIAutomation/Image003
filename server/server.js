@@ -25,9 +25,44 @@ const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+const storage = multer.diskStorage({
+  destination: UPLOADS_DIR,
+  filename: (req, file, cb) => {
+    // Create a unique filename with original extension
+    const uniqueSuffix = Date.now();
+    const originalExt = path.extname(file.originalname);
+    cb(null, file.fieldname + '_' + uniqueSuffix + originalExt);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  // List of allowed image MIME types
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/tiff',
+    'image/svg+xml',
+    'image/heic',
+    'image/heif'
+  ];
+  
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Supported image formats: JPG, JPEG, PNG, GIF, WebP, BMP, TIFF, SVG, HEIC, HEIF'), false);
+  }
+};
+
 const upload = multer({ 
-  dest: UPLOADS_DIR,
-  limits: { fileSize: 5 * 1024 * 1024 }
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { 
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
 });
 
 // Move CORS configuration before routes
@@ -44,8 +79,19 @@ app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
+  
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File is too large. Maximum size is 5MB.' });
+    }
+    return res.status(400).json({ error: 'File upload error: ' + err.message });
+  } else if (err.message === 'Only image files are allowed!') {
+    return res.status(400).json({ error: err.message });
+  }
+  
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -356,10 +402,39 @@ app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
 app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
+    
+    // Enhanced error handling for file upload
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: 'No photo uploaded',
+        details: 'Please select an image file to upload',
+        allowedFormats: ['JPG', 'JPEG', 'PNG', 'GIF', 'WebP', 'BMP', 'TIFF', 'SVG', 'HEIC', 'HEIF']
+      });
+    }
+
+    // Validate uploaded file
+    try {
+      const metadata = await sharp(req.file.path).metadata();
+      if (!metadata || !metadata.format) {
+        return res.status(400).json({
+          error: 'Invalid image file',
+          details: 'The uploaded file is not a valid image',
+          allowedFormats: ['JPG', 'JPEG', 'PNG', 'GIF', 'WebP', 'BMP', 'TIFF', 'SVG', 'HEIC', 'HEIF']
+        });
+      }
+    } catch (err) {
+      return res.status(400).json({
+        error: 'Image processing error',
+        details: 'Unable to process the uploaded image. Please try another file.',
+        technicalDetails: err.message
+      });
+    }
 
     const user = await db.getUser(id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ 
+      error: 'User not found',
+      details: 'The specified user does not exist in the database'
+    });
 
     // build a safe filename based on user name or id
     const filenameSafe = (user.name || id).replace(/[^a-z0-9]/gi, '_').toLowerCase();

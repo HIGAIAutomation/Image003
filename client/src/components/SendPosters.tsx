@@ -9,11 +9,39 @@ const SendPosters: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      setPreview(URL.createObjectURL(selectedFile));
-      setMessage(null);
+    if (!selectedFile) return;
+
+    // List of allowed MIME types
+    const allowedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/svg+xml',
+      'image/heic',
+      'image/heif'
+    ];
+
+    // Validate file type
+    if (!allowedTypes.includes(selectedFile.type)) {
+      setMessage('Please select a valid image file (JPG, JPEG, PNG, GIF, WebP, BMP, TIFF, SVG, HEIC, HEIF)');
+      e.target.value = ''; // Clear the input
+      return;
     }
+
+    // Validate file size (5MB limit)
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      setMessage('Image size should be less than 5MB');
+      e.target.value = ''; // Clear the input
+      return;
+    }
+
+    setFile(selectedFile);
+    setPreview(URL.createObjectURL(selectedFile));
+    setMessage(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -74,7 +102,7 @@ const SendPosters: React.FC = () => {
         <label className="block mb-2 text-sm font-medium text-gray-700">Upload Poster Template</label>
         <input
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif"
           onChange={handleFileChange}
           className="mb-4 w-full"
         />

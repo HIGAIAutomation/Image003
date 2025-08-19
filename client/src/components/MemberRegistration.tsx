@@ -224,7 +224,7 @@ const MemberRegistration = () => {
                 <input
                   name="photo"
                   type="file"
-                  accept=".jpg,.jpeg"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif"
                   onChange={handleInputChange}
                   className="hidden"
                 />

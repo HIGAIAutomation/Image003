@@ -10,22 +10,16 @@ const fs = require('fs');
  * - Adjusted vertical spacing for the text block to have equal space above and below.
  */
 function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fontSize) {
+  // Add more vertical space between lines for clarity
   const totalLines = 4;
-  
-  // Calculate responsive font sizes based on image width
-  const responsiveBaseFontSize = Math.max(textWidth * 0.04, 28); // 4% of text width, minimum 28px
-  const baseFontSize = Math.min(responsiveBaseFontSize, 48); // Cap at 48px for very large images
-  
-  // Spacing calculations
-  const lineHeight = Math.round(baseFontSize * 1.5); // 1.5x line height for readability
+  const lineHeight = Math.round(fontSize * 1.5); // Increased line height for more space
   const totalHeight = lineHeight * totalLines;
-  const verticalPadding = Math.max(30, (footerHeight - totalHeight) / 2);
-  const startY = verticalPadding + lineHeight * 0.7;
-  const textPadding = Math.max(20, textWidth * 0.02); // Responsive padding, minimum 20px
-  
-  // Font size limits
-  const MIN_FONT_SIZE = Math.max(24, textWidth * 0.02); // Responsive minimum
-  const allFontSizeInitial = baseFontSize;
+  const verticalPadding = (footerHeight - totalHeight) / 2;
+  const startY = verticalPadding + lineHeight * 0.6; // First baseline
+  const textPadding = 2; // Consistent left padding
+  // Minimum font size allowed; lower value to avoid forced overflow
+  const MIN_FONT_SIZE = 12;
+  const allFontSizeInitial = Math.max(fontSize, 18);
   let allFontSize = allFontSizeInitial;
 
   // Helper: normalize casing and format designation
@@ -70,29 +64,23 @@ function generateFooterSVG(name, designation, phone, textWidth, footerHeight, fo
     if (allFontSize <= MIN_FONT_SIZE) break;
   }
 
-  const svgLines = [
-    `<text x="${textPadding}" y="${startY}" class="footertext">${lines[0]}</text>`,
-    `<text x="${textPadding}" y="${startY + lineHeight}" class="footertext">${lines[1]}</text>`,
-    `<text x="${textPadding}" y="${startY + lineHeight * 2}" class="footertext">${lines[2]}</text>`,
-    `<text x="${textPadding}" y="${startY + lineHeight * 3}" class="footertext">${lines[3]}</text>`
-  ];
+  let svgLines = [];
+  let y = startY;
+  for (const l of lines) {
+    svgLines.push(`<text x="${textPadding}" y="${y}" class="footertext">${l}</text>`);
+    y += lineHeight;
+  }
 
   return `
     <svg width="${textWidth}" height="${footerHeight}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="textShadow">
-          <feDropShadow dx="1" dy="1" stdDeviation="0.2" flood-opacity="0.3"/>
-        </filter>
-      </defs>
       <style>
         .footertext {
           font-family: Arial, sans-serif;
-          fill: #1B3087;
-          font-weight: 700;
+          fill: #292d6c;
+          font-weight: bold;
           font-size: ${allFontSize}px;
           text-anchor: start;
           dominant-baseline: middle;
-          filter: url(#textShadow);
         }
       </style>
       ${svgLines.join('\n')}
@@ -123,40 +111,9 @@ async function processCircularImage(inputPath, outputPath, size) {
  * Creates the final composite poster.
  */
 async function createFinalPoster({ templatePath, person, logoPath, outputPath }) {
-  try {
-    // Convert relative photo URL to absolute file path
-    const photoPath = person.photo.startsWith('/') 
-      ? require('path').join(__dirname, '..', person.photo)
-      : person.photo;
-
-    // Verify all input files exist
-    if (!fs.existsSync(templatePath)) {
-      throw new Error(`Template file not found: ${templatePath}`);
-    }
-    if (!fs.existsSync(logoPath)) {
-      throw new Error(`Logo file not found: ${logoPath}`);
-    }
-    if (!fs.existsSync(photoPath)) {
-      throw new Error(`Photo file not found: ${photoPath}`);
-    }
-
-    // Create a copy of the template to avoid file locking issues
-    const tempTemplatePath = `${templatePath}_temp`;
-    await fs.promises.copyFile(templatePath, tempTemplatePath);
-    
-    // Get original image dimensions
-    const imageInfo = await sharp(tempTemplatePath).metadata();
-    // Maintain aspect ratio while ensuring minimum width
-    const targetWidth = Math.max(1200, imageInfo.width);
-    const templateResized = await sharp(tempTemplatePath)
-      .resize({
-        width: targetWidth,
-        height: Math.round(targetWidth * (imageInfo.height / imageInfo.width)),
-        fit: 'contain'
-      })
-      .toBuffer();
-    const templateMetadata = await sharp(templateResized).metadata();
-    const width = templateMetadata.width;
+  const templateResized = await sharp(templatePath).resize({ width: 800 }).toBuffer();
+  const templateMetadata = await sharp(templateResized).metadata();
+  const width = templateMetadata.width;
 
   const photoSize = Math.floor(width * 0.18);
   const fontSize = Math.round(width * 0.022); // ~18px for 800px width
@@ -191,7 +148,7 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
   const textBuffer = await sharp(Buffer.from(footerSVG)).png().toBuffer();
   const textMetadata = await sharp(textBuffer).metadata();
 
-  const circularPhoto = await sharp(photoPath)
+  const circularPhoto = await sharp(person.photo)
     .resize(photoSize, photoSize)
     .composite([{
       input: Buffer.from(
@@ -262,19 +219,6 @@ async function createFinalPoster({ templatePath, person, logoPath, outputPath })
     .toBuffer();
 
   fs.writeFileSync(outputPath, finalImageBuffer);
-
-    // Clean up temp files
-    try {
-      if (fs.existsSync(tempTemplatePath)) {
-        await fs.promises.unlink(tempTemplatePath);
-      }
-    } catch (cleanupErr) {
-      console.warn('Failed to clean up temp template:', cleanupErr.message);
-    }
-  } catch (error) {
-    console.error('Error in createFinalPoster:', error);
-    throw error;
-  }
 }
 
 module.exports = {

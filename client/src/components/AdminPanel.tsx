@@ -273,9 +273,42 @@ const AdminPanel: React.FC = () => {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // List of allowed MIME types
+    const allowedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/svg+xml',
+      'image/heic',
+      'image/heif'
+    ];
+
+    // Validate file type
+    if (!allowedTypes.includes(file.type)) {
+      message.error('Please select a valid image file (JPG, JPEG, PNG, GIF, WebP, BMP, TIFF, SVG, HEIC, HEIF)');
+      e.target.value = ''; // Clear the input
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      message.error('Image size should be less than 5MB');
+      e.target.value = ''; // Clear the input
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       setSrcImage(reader.result as string);
+    };
+    reader.onerror = () => {
+      message.error('Error reading file');
+      e.target.value = ''; // Clear the input
     };
     reader.readAsDataURL(file);
   };
@@ -784,7 +817,11 @@ const AdminPanel: React.FC = () => {
         destroyOnClose
       >
         <div className="space-y-3">
-          <input type="file" accept="image/*" onChange={handleImageUpload} />
+          <input 
+            type="file" 
+            accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif" 
+            onChange={handleImageUpload}
+          />
           {srcImage ? (
             <div className="max-h-[60vh] overflow-auto">
               <ReactCrop
