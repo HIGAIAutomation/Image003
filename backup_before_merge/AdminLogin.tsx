@@ -20,6 +20,18 @@ const AdminLogin = () => {
         credentials: 'include', // Send/receive cookies
       });
 
+<<<<<<< HEAD
+      const data = await res.json();
+      
+      if (res.ok) {
+        navigate('/admin');
+      } else {
+        setError(data.error || 'Invalid credentials');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'Server error. Please try again.');
+=======
       if (res.ok) {
         navigate('/admin');
       } else {
@@ -27,6 +39,7 @@ const AdminLogin = () => {
       }
     } catch (err) {
       setError('Server error');
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
     } finally {
       setLoading(false);
     }
@@ -64,3 +77,17 @@ const AdminLogin = () => {
 };
 
 export default AdminLogin;
+<<<<<<< HEAD
+
+// TypeScript declaration for Vite's import.meta.env
+declare global {
+  interface ImportMetaEnv {
+    readonly VITE_API_URL: string;
+    // add other env variables here if needed
+  }
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+}
+=======
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8

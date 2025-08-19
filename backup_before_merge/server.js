@@ -19,18 +19,66 @@ const db = require('./db');
 
 const app = express();
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
+<<<<<<< HEAD
+const OUTPUT_DIR = path.join(__dirname, 'output');
+=======
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 const LOGO_PATH = path.join(__dirname, 'assets/logo.png');
 
 if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
+<<<<<<< HEAD
+const storage = multer.diskStorage({
+  destination: UPLOADS_DIR,
+  filename: (req, file, cb) => {
+    // Create a unique filename with original extension
+    const uniqueSuffix = Date.now();
+    const originalExt = path.extname(file.originalname);
+    cb(null, file.fieldname + '_' + uniqueSuffix + originalExt);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  // List of allowed image MIME types
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/tiff',
+    'image/svg+xml',
+    'image/heic',
+    'image/heif'
+  ];
+  
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Supported image formats: JPG, JPEG, PNG, GIF, WebP, BMP, TIFF, SVG, HEIC, HEIF'), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { 
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+=======
 const upload = multer({ 
   dest: UPLOADS_DIR,
   limits: { fileSize: 5 * 1024 * 1024 }
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 });
 
 // Move CORS configuration before routes
 app.use(cors({
+<<<<<<< HEAD
+  origin: ['https://abuinshah.netlify.app', 'http://localhost:5173'],
+=======
   origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
@@ -40,6 +88,7 @@ app.use(cors({
     }
     return callback(null, true);
   },
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
@@ -51,8 +100,24 @@ app.use(cookieParser(process.env.ADMIN_TOKEN_SECRET || 'supersecret'));
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../client/dist')));
 
+<<<<<<< HEAD
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server Error:', err);
+  
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File is too large. Maximum size is 5MB.' });
+    }
+    return res.status(400).json({ error: 'File upload error: ' + err.message });
+  } else if (err.message === 'Only image files are allowed!') {
+    return res.status(400).json({ error: err.message });
+  }
+  
+=======
+app.use((err, req, res, next) => {
+  console.error('Server Error:', err);
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -140,10 +205,18 @@ app.post('/api/register', upload.single('photo'), async (req, res) => {
 });
 
 app.post('/api/send-posters', upload.single('template'), async (req, res) => {
+<<<<<<< HEAD
+  const tempFiles = [];
+=======
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
   try {
     const { designation } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Template image is required' });
     const templatePath = req.file.path;
+<<<<<<< HEAD
+    tempFiles.push(templatePath); // track for cleanup
+=======
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 
     // Standardize designations and ensure correct format
     let designationsToSend = [];
@@ -170,16 +243,66 @@ app.post('/api/send-posters', upload.single('template'), async (req, res) => {
       for (const person of recipients) {
         const finalImagePath = `uploads/final_${Date.now()}_${person.name.replace(/\s+/g, '_')}.jpeg`;
         try {
+<<<<<<< HEAD
+          // Create poster first
+          await createFinalPoster({ 
+            templatePath, 
+            person: {
+              ...person,
+              photo: path.join(__dirname, person.photoUrl.startsWith('/') ? person.photoUrl.slice(1) : person.photoUrl)
+            }, 
+            logoPath: LOGO_PATH, 
+            outputPath: finalImagePath 
+          });
+
+          // Verify the poster was created
+          if (!fs.existsSync(finalImagePath)) {
+            throw new Error('Failed to create poster image');
+          }
+
+          // Send email with the poster
+          await sendEmail({ 
+            Name: person.name, 
+            Email: person.email, 
+            Phone: person.phone, 
+            Designation: person.designation 
+          }, finalImagePath);
+
+          console.log(`Successfully processed ${person.name}`);
+
+          // Cleanup only after email is sent
+          try {
+            await fs.promises.unlink(finalImagePath);
+          } catch (e) {
+            console.warn(`Cleanup failed for ${person.name} (ignored):`, e.message || e);
+          }
+        } catch (err) {
+          console.error(`Failed for ${person.name}:`, err.message || err);
+=======
           await createFinalPoster({ templatePath, person, logoPath: LOGO_PATH, outputPath: finalImagePath });
           await sendEmail({ Name: person.name, Email: person.email, Phone: person.phone, Designation: person.designation }, finalImagePath);
     try { await fs.promises.unlink(finalImagePath); } catch (e) { console.warn(`Cleanup failed for ${person.name} (ignored):`, e.message || e); }
         } catch (err) {
           console.error(`Failed for ${person.name}:`, err);
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
         }
       }
     }
 
+<<<<<<< HEAD
+    // Cleanup all temp files
+    for (const file of tempFiles) {
+      try {
+        if (fs.existsSync(file)) {
+          await fs.promises.unlink(file);
+        }
+      } catch (e) {
+        console.warn(`Cleanup failed for ${file}:`, e.message || e);
+      }
+    }
+=======
   try { fs.unlinkSync(templatePath); } catch (e) { console.warn('Template cleanup failed (ignored):', e.message || e); }
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 
     if (totalRecipients === 0) {
       return res.status(404).json({ error: `No recipients found for designation: ${designation}` });
@@ -223,12 +346,29 @@ app.post('/api/admin-login', (req, res) => {
   const validUsername = process.env.ADMIN_USERNAME;
   const validPassword = process.env.ADMIN_PASSWORD;
 
+<<<<<<< HEAD
+  console.log('Login attempt:', { username, validUsername: !!validUsername, validPassword: !!validPassword });
+
+  if (!validUsername || !validPassword) {
+    console.error('Admin credentials not configured in .env file');
+    return res.status(500).json({ error: 'Admin credentials not configured' });
+  }
+  
+  if (username === validUsername && password === validPassword) {
+    const token = generateToken();
+    res.cookie(ADMIN_COOKIE_NAME, token, ADMIN_COOKIE_OPTIONS);
+    console.log('Login successful for:', username);
+    res.json({ success: true });
+  } else {
+    console.log('Login failed for:', username);
+=======
   if (!validUsername || !validPassword) return res.status(500).json({ error: 'Admin credentials not configured' });
   if (username === validUsername && password === validPassword) {
     const token = generateToken();
     res.cookie(ADMIN_COOKIE_NAME, token, ADMIN_COOKIE_OPTIONS);
     res.json({ success: true });
   } else {
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
     res.status(401).json({ error: 'Invalid credentials' });
   }
 });
@@ -315,10 +455,46 @@ app.post('/api/admin/migrate-photo', isAdmin, async (req, res) => {
 app.put('/api/users/:id/photo', upload.single('photo'), isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+<<<<<<< HEAD
+    
+    // Enhanced error handling for file upload
+    if (!req.file) {
+      return res.status(400).json({ 
+        error: 'No photo uploaded',
+        details: 'Please select an image file to upload',
+        allowedFormats: ['JPG', 'JPEG', 'PNG', 'GIF', 'WebP', 'BMP', 'TIFF', 'SVG', 'HEIC', 'HEIF']
+      });
+    }
+
+    // Validate uploaded file
+    try {
+      const metadata = await sharp(req.file.path).metadata();
+      if (!metadata || !metadata.format) {
+        return res.status(400).json({
+          error: 'Invalid image file',
+          details: 'The uploaded file is not a valid image',
+          allowedFormats: ['JPG', 'JPEG', 'PNG', 'GIF', 'WebP', 'BMP', 'TIFF', 'SVG', 'HEIC', 'HEIF']
+        });
+      }
+    } catch (err) {
+      return res.status(400).json({
+        error: 'Image processing error',
+        details: 'Unable to process the uploaded image. Please try another file.',
+        technicalDetails: err.message
+      });
+    }
+
+    const user = await db.getUser(id);
+    if (!user) return res.status(404).json({ 
+      error: 'User not found',
+      details: 'The specified user does not exist in the database'
+    });
+=======
     if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
 
     const user = await db.getUser(id);
     if (!user) return res.status(404).json({ error: 'User not found' });
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 
     // build a safe filename based on user name or id
     const filenameSafe = (user.name || id).replace(/[^a-z0-9]/gi, '_').toLowerCase();

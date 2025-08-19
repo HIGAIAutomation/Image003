@@ -6,17 +6,47 @@ const createTransporter = () => {
   const email = process.env.GMAIL_USER;
   const appPassword = process.env.GMAIL_PASS;
 
+<<<<<<< HEAD
+  console.log('Configuring email with:', { 
+    hasEmail: !!email, 
+    hasPassword: !!appPassword,
+    email: email // show the email for debugging
+  });
+
+  if (!email || !appPassword) {
+    throw new Error('Email credentials not configured. Please set GMAIL_USER and GMAIL_PASS in .env file');
+  }
+
+  const transporter = nodemailer.createTransport({
+=======
   if (!email || !appPassword) {
     throw new Error('Email credentials not configured. Please set EMAIL and APP_PASSWORD in .env file');
   }
 
   return nodemailer.createTransport({
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
     service: 'gmail',
     auth: {
       user: email,
       pass: appPassword,
     },
+<<<<<<< HEAD
+    debug: true // Enable debug logs
   });
+
+  // Verify the connection configuration
+  return transporter.verify()
+    .then(() => {
+      console.log('Email connection verified successfully');
+      return transporter;
+    })
+    .catch(err => {
+      console.error('Email verification failed:', err);
+      throw err;
+    });
+=======
+  });
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 };
 
 function generateSubject(designation) {
@@ -77,19 +107,49 @@ function generateEmailContent(data) {
 
 async function sendEmail(data, imagePath) {
   try {
+<<<<<<< HEAD
+    console.log('Attempting to send email to:', data.Email);
+    console.log('Image path:', imagePath);
+
+    if (!fs.existsSync(imagePath)) {
+      throw new Error(`Image file not found: ${imagePath}`);
+    }
+
+    const transporter = await createTransporter(); // Note: createTransporter is now async
+=======
     const transporter = createTransporter();
     await transporter.verify();
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 
     const subject = generateSubject(data.Designation);
     const htmlContent = generateEmailContent(data);
 
     const mailOptions = {
+<<<<<<< HEAD
+      from: `"Wealth Plus" <${process.env.GMAIL_USER}>`,
+=======
       from: process.env.EMAIL,
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
       to: data.Email,
       subject,
       html: htmlContent,
       attachments: [
         {
+<<<<<<< HEAD
+          filename: 'your-poster.jpeg',
+          path: imagePath,
+          contentType: 'image/jpeg'
+        }
+      ],
+    };
+    
+    console.log('Preparing to send email:', {
+      to: data.Email,
+      from: process.env.GMAIL_USER,
+      subject: subject,
+      hasAttachment: fs.existsSync(imagePath)
+    });
+=======
           filename: 'poster.png',
           path: imagePath,
           // Removed 'cid: personalizedCard' so it's not embedded inline
@@ -97,6 +157,7 @@ async function sendEmail(data, imagePath) {
         }
       ],
     };
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 
     const result = await transporter.sendMail(mailOptions);
     console.log(`✅ Email sent to ${data.Email}`);

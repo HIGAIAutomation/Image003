@@ -1,6 +1,10 @@
 const fs = require('fs');
 const path = require('path');
+<<<<<<< HEAD
+
+=======
 const XLSX = require('xlsx');
+>>>>>>> bd41e31fcd4ae43fd008edf0a48e4302f71252b8
 
 const OUTPUT_DIR = path.join(__dirname, '../output');
 const EXCEL_PATH = path.join(OUTPUT_DIR, 'members.xlsx');
